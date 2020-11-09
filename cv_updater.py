@@ -4,6 +4,12 @@
 # In[1]:
 
 
+# %load sele.py
+#!/usr/bin/env python
+
+# In[1]:
+
+
 import selenium                                                                 
 from time import sleep                                                          
                                                                                 
@@ -19,23 +25,15 @@ from selenium.common.exceptions import TimeoutException
 import pause
 import datetime
 import time                                                        
+from selenium import webdriver
+import threading
 
 
 # In[2]:
 
 
-# use firefox to get page with javascript generated content                     
-#https://thequestion.ru/account/256980/konstantin-lyaifer                       
-# print('Hello, please wait...')                                                  
-# browser = selenium.webdriver.Firefox(executable_path='/home/maksimka/web/geckodriver')
-# user_agent = 'Mozilla/6.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
-
-
-# browser.set_preference("general.useragent.override", user_agent)
-from selenium import webdriver
-                                    
 profile = webdriver.FirefoxProfile()
-user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
+user_agent = 'barebuh'
 
 
 profile.set_preference("general.useragent.override", user_agent)
@@ -47,7 +45,8 @@ while input() != 'y':
     print('<y/n>')
 
 
-# In[21]:
+
+# In[3]:
 
 
 answers = browser.find_elements_by_class_name('applicant-resumes-action')
@@ -55,36 +54,103 @@ button = answers[1]
 print(len(answers))
 
 
-# In[25]:
+# In[4]:
+
+
 
 
 def update_resume():
-    try:
-        browser.refresh();
-        answers = browser.find_elements_by_class_name('applicant-resumes-action')
-        button = answers[1]
-        answers = browser.find_elements_by_class_name('applicant-resumes-action')
-        button_prop = answers[1].find_element_by_tag_name('div').find_element_by_tag_name('span').find_element_by_tag_name('button')
-    except NoSuchElementException:
-         try:
-            button_prop = answers[1].find_element_by_tag_name('span').find_element_by_tag_name('button')
+    browser.refresh();
+    answers = browser.find_elements_by_class_name('applicant-resumes-action')
+    res = 0
+    for button in answers:
+        if len(button.find_elements_by_class_name('applicant-resumes-update-button_disabled')):
+            continue
+        try:
+            button_prop = button.find_element_by_tag_name('span').find_element_by_tag_name('button')
             button.click()
-            return datetime.datetime.today()
-         except :
-            return 0
-    return 0
-
-
-# In[26]:
-
+            res = datetime.datetime.today()
+            break
+        except:
+            pass
+    return res
 
 def alarm():
-    #while True:
     for i in range(10):
         time.sleep(1)
         get_ipython().system('paplay --volume=20000 /home/maksimka/Music/beep_sounds/beep-02.wav')
 
 
+
+# In[ ]:
+
+
+
+
+
+# In[5]:
+
+
+def parser():
+    global need_to_update
+    global should_sleep 
+    while True:
+        with update:
+            update.wait_for(lambda : need_to_update)
+        t = datetime.datetime.today()
+        res = update_resume()
+        if res != 0:
+            print('Updated ', res)
+            print('pause 1:20')
+            with wake_up:
+                i = wake_up.wait_for(lambda:not should_sleep, timeout = 4800+60) # ждем 4 часа / 3 ( 3 резюме)
+                should_sleep = True
+        else:
+            print('Error ', datetime.datetime.today(), 'sleep 30 min')
+            with wake_up:
+                i = wake_up.wait_for(lambda:not should_sleep, timeout = 30*60)
+                should_sleep = True
+
+
+# In[6]:
+
+
+def command_listener():
+    while True:
+        global need_to_update
+        global should_sleep 
+        s = input() 
+        if s == 'upd':
+            need_to_update = True
+            with update:
+                update.notifyAll()
+        elif s == 'wait':
+            need_to_update = False
+        elif s == 'wake':
+            with wake_up:
+                should_sleep = False
+                wake_up.notifyAll()
+        else:
+            print('Unknown command, try again')
+
+
+# In[ ]:
+
+
+import threading
+need_to_update = False
+should_sleep = True 
+update = threading.Condition()
+wake_up = threading.Condition()
+
+listener = threading.Thread(target=command_listener)                                    
+parser_th = threading.Thread(target=parser)                                    
+listener.start()                                                                
+parser_th.start() 
+listener.join()
+parser_th.join()
+
+
 # In[ ]:
 
 
@@ -94,22 +160,5 @@ def alarm():
 # In[ ]:
 
 
-t = datetime.datetime.today()
-start = datetime.datetime(t.year,t.month,t.day,10,0)
-if t.hour > 10:
-    start = t
-pause.until(start)
-while True:
-    res = update_resume()
-    if res != 0:
-        print('Updated ', res)
-        start = res + datetime.timedelta(hours=4,minutes=2)
-        if start > datetime.datetime(t.year,t.month,t.day,23,55): 
-            start = datetime.datetime(t.year,t.month,t.day,10,0) + datetime.timedelta(days=1)
-        print('pause until ', start)
-        pause.until(start)
-    else:
-        print('Error ', datetime.datetime.today(), 'sleep 30 min')
-        time.sleep(30*60)
 
 
